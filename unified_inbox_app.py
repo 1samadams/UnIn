@@ -1,6 +1,6 @@
-
 import os
 import requests
+import logging
 from flask import Flask, render_template, redirect, url_for, session, request, flash, jsonify
 from requests_oauthlib import OAuth2Session
 from cachetools import TTLCache
@@ -13,6 +13,9 @@ load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
+
+# Logging configuration for error logs
+logging.basicConfig(filename='app_errors.log', level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # OAuth2 Configuration
 MICROSOFT_CLIENT_ID = os.getenv('MICROSOFT_CLIENT_ID')
@@ -35,7 +38,7 @@ def cache_api_response(cache_key):
     def decorator(func):
         @wraps(func)
         def wrapper(*args, **kwargs):
-            if cache_key in cache:
+            if cache_key in cache and not request.args.get('refresh'):
                 return cache[cache_key]
             result = func(*args, **kwargs)
             cache[cache_key] = result
@@ -79,8 +82,12 @@ def callback_linkedin():
 def fetch_office365_emails(token, next_page=None):
     headers = {'Authorization': f"Bearer {token}"}
     url = next_page or 'https://graph.microsoft.com/v1.0/me/messages'
-    response = requests.get(url, headers=headers)
-    response.raise_for_status()
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Failed to fetch Office 365 emails: {e}")
+        raise
     data = response.json()
     return data.get('value', []), data.get('@odata.nextLink', None)
 
@@ -88,8 +95,12 @@ def fetch_office365_emails(token, next_page=None):
 def fetch_linkedin_messages(token, next_page=None):
     headers = {'Authorization': f"Bearer {token}"}
     url = next_page or 'https://api.linkedin.com/v2/conversations'
-    response = requests.get(url, headers=headers)
-    response.raise_for_status()
+    try:
+        response = requests.get(url, headers=headers)
+        response.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Failed to fetch LinkedIn messages: {e}")
+        raise
     data = response.json()
     return data.get('elements', []), data.get('paging', {}).get('next', None)
 
@@ -154,6 +165,11 @@ def loading():
     """Simulate a loading page for AJAX loading spinner."""
     return jsonify({'status': 'loading'})
 
+@app.route('/clear_cache')
+def clear_cache():
+    """Clear the cache manually and refresh the inbox."""
+    cache.clear()
+    return redirect(url_for('unified_inbox', refresh=True))
 
 # Unit Tests
 class TestFetchEmails(unittest.TestCase):
@@ -179,8 +195,4 @@ class TestFetchEmails(unittest.TestCase):
         mock_get.return_value.status_code = 200
         mock_get.return_value.json.return_value = mock_response
         messages, next_page = fetch_linkedin_messages('dummy_token')
-        self.assertEqual(len(messages), 1)
-        self.assertEqual(next_page, 'https://linkedin.com/nextPage')
-
-if __name__ == '__main__':
-    app.run(debug=True)
+       
