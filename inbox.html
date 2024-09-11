@@ -10,10 +10,10 @@
 <div class="container mt-5">
     <h2 class="text-center">Unified Inbox</h2>
 
-    <!-- Display error messages -->
+    <!-- Display error and info messages -->
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
-            <div class="alert alert-danger">
+            <div class="alert alert-info">
                 {% for category, message in messages %}
                     <p>{{ message }}</p>
                 {% endfor %}
@@ -35,7 +35,7 @@
             <div class="col-md-6">
                 <div class="input-group">
                     <label class="input-group-text">Sort by</label>
-                    <select class="form-select" name="sort_option" onchange="showLoadingSpinner(); this.form.submit()">
+                    <select class="form-select" name="sort_option" onchange="this.form.submit()">
                         <option value="date_desc" {% if sort_option == 'date_desc' %} selected {% endif %}>Date (Newest)</option>
                         <option value="date_asc" {% if sort_option == 'date_asc' %} selected {% endif %}>Date (Oldest)</option>
                         <option value="subject_asc" {% if sort_option == 'subject_asc' %} selected {% endif %}>Subject (A-Z)</option>
@@ -51,53 +51,79 @@
         <a class="btn btn-info mb-3" href="{{ url_for('clear_cache') }}">Refresh Inbox</a>
     </div>
 
-    <!-- Loading spinner -->
-    <div id="loading-spinner" class="d-none text-center">
-        <div class="spinner-border" role="status">
-            <span class="visually-hidden">Loading...</span>
-        </div>
+    <!-- Office 365 Emails Section -->
+    <div class="col-md-6" id="office365-email-list">
+        <h3 class="text-primary">Office 365 Emails</h3>
+        <ul class="list-group">
+            {% for email in unified['emails'] %}
+                <li class="list-group-item">
+                    <strong>{{ email['subject'] }}</strong> <br>
+                    Received: {{ email['receivedDateTime'] }}
+                </li>
+            {% endfor %}
+        </ul>
+        <div id="office365-load-more" data-next-page="{{ unified['office365_next_page'] }}"></div>
     </div>
 
-    <div class="row" id="inbox-content">
-        <!-- Office 365 Emails Section -->
-        <div class="col-md-6">
-            <h3 class="text-primary">Office 365 Emails</h3>
-            <ul class="list-group">
-                {% for email in unified['emails'] %}
-                    <li class="list-group-item">
-                        <strong>{{ email['subject'] }}</strong> <br>
-                        Received: {{ email['receivedDateTime'] }}
-                    </li>
-                {% endfor %}
-            </ul>
-            {% if unified['office365_next_page'] %}
-                <a class="btn btn-secondary mt-3" href="{{ url_for('unified_inbox', office365_next_page=unified['office365_next_page']) }}" onclick="showLoadingSpinner();">Next Page of Emails</a>
-            {% endif %}
-        </div>
-
-        <!-- LinkedIn Messages Section -->
-        <div class="col-md-6">
-            <h3 class="text-info">LinkedIn Messages</h3>
-            <ul class="list-group">
-                {% for message in unified['linkedin_messages'] %}
-                    <li class="list-group-item">
-                        <strong>{{ message['subject'] }}</strong> <br>
-                        Created: {{ message['created'] }}
-                    </li>
-                {% endfor %}
-            </ul>
-            {% if unified['linkedin_next_page'] %}
-                <a class="btn btn-secondary mt-3" href="{{ url_for('unified_inbox', linkedin_next_page=unified['linkedin_next_page']) }}" onclick="showLoadingSpinner();">Next Page of LinkedIn Messages</a>
-            {% endif %}
-        </div>
+    <!-- LinkedIn Messages Section -->
+    <div class="col-md-6" id="linkedin-message-list">
+        <h3 class="text-info">LinkedIn Messages</h3>
+        <ul class="list-group">
+            {% for message in unified['linkedin_messages'] %}
+                <li class="list-group-item">
+                    <strong>{{ message['subject'] }}</strong> <br>
+                    Created: {{ message['created'] }}
+                </li>
+            {% endfor %}
+        </ul>
+        <div id="linkedin-load-more" data-next-page="{{ unified['linkedin_next_page'] }}"></div>
     </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
 <script>
-    function showLoadingSpinner() {
-        document.getElementById('loading-spinner').classList.remove('d-none');
-        document.getElementById('inbox-content').classList.add('d-none');
+    let officeNextPage = document.getElementById('office365-load-more').dataset.nextPage;
+    let linkedinNextPage = document.getElementById('linkedin-load-more').dataset.nextPage;
+
+    window.onscroll = function() {
+        if (window.innerHeight + window.scrollY >= document.body.offsetHeight) {
+            if (officeNextPage) {
+                loadMoreEmails(officeNextPage);
+            }
+            if (linkedinNextPage) {
+                loadMoreLinkedInMessages(linkedinNextPage);
+            }
+        }
+    };
+
+    function loadMoreEmails(nextPageUrl) {
+        fetch(`/load_more_emails?office365_next_page=${nextPageUrl}`)
+            .then(response => response.json())
+            .then(data => {
+                const emailList = document.getElementById('office365-email-list');
+                data.emails.forEach(email => {
+                    const listItem = document.createElement('li');
+                    listItem.classList.add('list-group-item');
+                    listItem.innerHTML = `<strong>${email.subject}</strong><br>Received: ${email.receivedDateTime}`;
+                    emailList.appendChild(listItem);
+                });
+                officeNextPage = data.next_page;
+            });
+    }
+
+    function loadMoreLinkedInMessages(nextPageUrl) {
+        fetch(`/load_more_linkedin_messages?linkedin_next_page=${nextPageUrl}`)
+            .then(response => response.json())
+            .then(data => {
+                const messageList = document.getElementById('linkedin-message-list');
+                data.messages.forEach(message => {
+                    const listItem = document.createElement('li');
+                    listItem.classList.add('list-group-item');
+                    listItem.innerHTML = `<strong>${message.subject}</strong><br>Created: ${message.created}`;
+                    messageList.appendChild(listItem);
+                });
+                linkedinNextPage = data.next_page;
+            });
     }
 </script>
 </body>
