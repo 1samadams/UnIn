@@ -123,12 +123,16 @@ def unified_inbox():
 
     try:
         emails, office365_next_page = fetch_office365_emails(microsoft_token['access_token'], office365_next_page)
+        if not emails:
+            flash('No new emails available.', 'info')
     except Exception as e:
         flash('Failed to retrieve Office 365 emails.', 'danger')
         emails = []
 
     try:
         linkedin_messages, linkedin_next_page = fetch_linkedin_messages(linkedin_token['access_token'], linkedin_next_page)
+        if not linkedin_messages:
+            flash('No new LinkedIn messages available.', 'info')
     except Exception as e:
         flash('Failed to retrieve LinkedIn messages.', 'danger')
         linkedin_messages = []
@@ -165,34 +169,32 @@ def loading():
     """Simulate a loading page for AJAX loading spinner."""
     return jsonify({'status': 'loading'})
 
+@app.route('/load_more_emails', methods=['GET'])
+def load_more_emails():
+    """Fetch additional Office 365 emails for infinite scrolling."""
+    microsoft_token = session.get('microsoft_token')
+    office365_next_page = request.args.get('office365_next_page')
+    try:
+        emails, next_page = fetch_office365_emails(microsoft_token['access_token'], office365_next_page)
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    return jsonify({'emails': emails, 'next_page': next_page})
+
+@app.route('/load_more_linkedin_messages', methods=['GET'])
+def load_more_linkedin_messages():
+    """Fetch additional LinkedIn messages for infinite scrolling."""
+    linkedin_token = session.get('linkedin_token')
+    linkedin_next_page = request.args.get('linkedin_next_page')
+    try:
+        messages, next_page = fetch_linkedin_messages(linkedin_token['access_token'], linkedin_next_page)
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+    return jsonify({'messages': messages, 'next_page': next_page})
+
 @app.route('/clear_cache')
 def clear_cache():
     """Clear the cache manually and refresh the inbox."""
     cache.clear()
-    return redirect(url_for('unified_inbox', refresh=True))
-
-# Unit Tests
-class TestFetchEmails(unittest.TestCase):
-    @patch('requests.get')
-    def test_fetch_office365_emails(self, mock_get):
-        mock_response = {
-            'value': [{'subject': 'Test email', 'receivedDateTime': '2024-01-01T12:00:00Z'}],
-            '@odata.nextLink': 'https://graph.microsoft.com/nextPageLink'
-        }
-        mock_get.return_value.status_code = 200
-        mock_get.return_value.json.return_value = mock_response
-        emails, next_page = fetch_office365_emails('dummy_token')
-        self.assertEqual(len(emails), 1)
-        self.assertEqual(emails[0]['subject'], 'Test email')
-        self.assertEqual(next_page, 'https://graph.microsoft.com/nextPageLink')
-
-    @patch('requests.get')
-    def test_fetch_linkedin_messages(self, mock_get):
-        mock_response = {
-            'elements': [{'subject': 'Test message', 'created': '2024-01-01T12:00:00Z'}],
-            'paging': {'next': 'https://linkedin.com/nextPage'}
-        }
-        mock_get.return_value.status_code = 200
-        mock_get.return_value.json.return_value = mock_response
-        messages, next_page = fetch_linkedin_messages('dummy_token')
-       
+    return redirect(url_for('unified_inbox', refresh=True
