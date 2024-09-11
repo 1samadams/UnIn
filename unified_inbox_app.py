@@ -1,3 +1,5 @@
+# File: unified_inbox_app.py
+
 import os
 import requests
 import logging
@@ -197,4 +199,34 @@ def load_more_linkedin_messages():
 def clear_cache():
     """Clear the cache manually and refresh the inbox."""
     cache.clear()
-    return redirect(url_for('unified_inbox', refresh=True
+    return redirect(url_for('unified_inbox', refresh=True))
+
+# Unit Tests
+class TestFetchEmails(unittest.TestCase):
+    @patch('requests.get')
+    def test_fetch_office365_emails(self, mock_get):
+        mock_response = {
+            'value': [{'subject': 'Test email', 'receivedDateTime': '2024-01-01T12:00:00Z'}],
+            '@odata.nextLink': 'https://graph.microsoft.com/nextPageLink'
+        }
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = mock_response
+        emails, next_page = fetch_office365_emails('dummy_token')
+        self.assertEqual(len(emails), 1)
+        self.assertEqual(emails[0]['subject'], 'Test email')
+        self.assertEqual(next_page, 'https://graph.microsoft.com/nextPageLink')
+
+    @patch('requests.get')
+    def test_fetch_linkedin_messages(self, mock_get):
+        mock_response = {
+            'elements': [{'subject': 'Test message', 'created': '2024-01-01T12:00:00Z'}],
+            'paging': {'next': 'https://linkedin.com/nextPage'}
+        }
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = mock_response
+        messages, next_page = fetch_linkedin_messages('dummy_token')
+        self.assertEqual(len(messages), 1)
+        self.assertEqual(next_page, 'https://linkedin.com/nextPage')
+
+if __name__ == '__main__':
+    app.run(debug=True)
