@@ -1,7 +1,9 @@
 import os
 import requests
-from flask import Flask, render_template, redirect, url_for, session, request, flash
+from flask import Flask, render_template, redirect, url_for, session, request, flash, jsonify
 from requests_oauthlib import OAuth2Session
+from cachetools import TTLCache
+from functools import wraps
 from dotenv import load_dotenv
 from unittest.mock import patch
 import unittest
@@ -23,6 +25,22 @@ LINKEDIN_CLIENT_SECRET = os.getenv('LINKEDIN_CLIENT_SECRET')
 LINKEDIN_AUTHORIZATION_BASE_URL = 'https://www.linkedin.com/oauth/v2/authorization'
 LINKEDIN_TOKEN_URL = 'https://www.linkedin.com/oauth/v2/accessToken'
 LINKEDIN_SCOPE = ['r_emailaddress', 'r_liteprofile', 'w_messaging']
+
+# Cache setup: caching for 5 minutes (300 seconds)
+cache = TTLCache(maxsize=100, ttl=300)
+
+def cache_api_response(cache_key):
+    """Caching decorator to reduce redundant API calls."""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            if cache_key in cache:
+                return cache[cache_key]
+            result = func(*args, **kwargs)
+            cache[cache_key] = result
+            return result
+        return wrapper
+    return decorator
 
 @app.route('/')
 def index():
@@ -56,6 +74,7 @@ def callback_linkedin():
     session['linkedin_token'] = token
     return redirect(url_for('unified_inbox'))
 
+@cache_api_response('office365_emails')
 def fetch_office365_emails(token, next_page=None):
     headers = {'Authorization': f"Bearer {token}"}
     url = next_page or 'https://graph.microsoft.com/v1.0/me/messages'
@@ -64,6 +83,7 @@ def fetch_office365_emails(token, next_page=None):
     data = response.json()
     return data.get('value', []), data.get('@odata.nextLink', None)
 
+@cache_api_response('linkedin_messages')
 def fetch_linkedin_messages(token, next_page=None):
     headers = {'Authorization': f"Bearer {token}"}
     url = next_page or 'https://api.linkedin.com/v2/conversations'
@@ -127,6 +147,12 @@ def unified_inbox():
         'linkedin_next_page': linkedin_next_page
     }
     return render_template('inbox.html', unified=unified, search_query=search_query, sort_option=sort_option)
+
+@app.route('/loading')
+def loading():
+    """Simulate a loading page for AJAX loading spinner."""
+    return jsonify({'status': 'loading'})
+
 
 # Unit Tests
 class TestFetchEmails(unittest.TestCase):
