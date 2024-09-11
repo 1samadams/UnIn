@@ -10,10 +10,39 @@
 <div class="container mt-5">
     <h2 class="text-center">Unified Inbox</h2>
 
+    <!-- Display error messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            <div class="alert alert-danger">
+                {% for category, message in messages %}
+                    <p>{{ message }}</p>
+                {% endfor %}
+            </div>
+        {% endif %}
+    {% endwith %}
+
     <form method="POST" class="my-4">
-        <div class="input-group">
-            <input type="text" class="form-control" name="search_query" placeholder="Search emails and messages" value="{{ search_query }}">
-            <button type="submit" class="btn btn-primary">Search</button>
+        <div class="row">
+            <!-- Search bar -->
+            <div class="col-md-6">
+                <div class="input-group">
+                    <input type="text" class="form-control" name="search_query" placeholder="Search emails and messages" value="{{ search_query }}">
+                    <button type="submit" class="btn btn-primary">Search</button>
+                </div>
+            </div>
+
+            <!-- Sort options -->
+            <div class="col-md-6">
+                <div class="input-group">
+                    <label class="input-group-text">Sort by</label>
+                    <select class="form-select" name="sort_option" onchange="this.form.submit()">
+                        <option value="date_desc" {% if sort_option == 'date_desc' %} selected {% endif %}>Date (Newest)</option>
+                        <option value="date_asc" {% if sort_option == 'date_asc' %} selected {% endif %}>Date (Oldest)</option>
+                        <option value="subject_asc" {% if sort_option == 'subject_asc' %} selected {% endif %}>Subject (A-Z)</option>
+                        <option value="subject_desc" {% if sort_option == 'subject_desc' %} selected {% endif %}>Subject (Z-A)</option>
+                    </select>
+                </div>
+            </div>
         </div>
     </form>
 
@@ -23,7 +52,10 @@
             <h3 class="text-primary">Office 365 Emails</h3>
             <ul class="list-group">
                 {% for email in unified['emails'] %}
-                    <li class="list-group-item">{{ email['subject'] }}</li>
+                    <li class="list-group-item">
+                        <strong>{{ email['subject'] }}</strong> <br>
+                        Received: {{ email['receivedDateTime'] }}
+                    </li>
                 {% endfor %}
             </ul>
             {% if unified['office365_next_page'] %}
@@ -36,7 +68,10 @@
             <h3 class="text-info">LinkedIn Messages</h3>
             <ul class="list-group">
                 {% for message in unified['linkedin_messages'] %}
-                    <li class="list-group-item">{{ message['subject'] }}</li>
+                    <li class="list-group-item">
+                        <strong>{{ message['subject'] }}</strong> <br>
+                        Created: {{ message['created'] }}
+                    </li>
                 {% endfor %}
             </ul>
             {% if unified['linkedin_next_page'] %}
