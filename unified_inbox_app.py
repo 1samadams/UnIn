@@ -72,12 +72,15 @@ def fetch_linkedin_messages(token, next_page=None):
     data = response.json()
     return data.get('elements', []), data.get('paging', {}).get('next', None)
 
-@app.route('/inbox')
+@app.route('/inbox', methods=['GET', 'POST'])
 def unified_inbox():
     microsoft_token = session.get('microsoft_token')
     linkedin_token = session.get('linkedin_token')
     if not microsoft_token or not linkedin_token:
         return redirect(url_for('index'))
+
+    # Handle search query
+    search_query = request.form.get('search_query', '').lower()
 
     # Pagination parameters
     office365_next_page = request.args.get('office365_next_page')
@@ -93,13 +96,18 @@ def unified_inbox():
     except Exception as e:
         linkedin_messages = []
 
+    # Filter emails and messages based on the search query
+    if search_query:
+        emails = [email for email in emails if search_query in email.get('subject', '').lower()]
+        linkedin_messages = [msg for msg in linkedin_messages if search_query in msg.get('subject', '').lower()]
+
     unified = {
         'emails': emails,
         'linkedin_messages': linkedin_messages,
         'office365_next_page': office365_next_page,
         'linkedin_next_page': linkedin_next_page
     }
-    return render_template('inbox.html', unified=unified)
+    return render_template('inbox.html', unified=unified, search_query=search_query)
 
 # Unit Tests
 class TestFetchEmails(unittest.TestCase):
