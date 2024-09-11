@@ -1,6 +1,6 @@
 import os
 import requests
-from flask import Flask, render_template, redirect, url_for, session, request
+from flask import Flask, render_template, redirect, url_for, session, request, flash
 from requests_oauthlib import OAuth2Session
 from dotenv import load_dotenv
 from unittest.mock import patch
@@ -82,6 +82,9 @@ def unified_inbox():
     # Handle search query
     search_query = request.form.get('search_query', '').lower()
 
+    # Handle sorting
+    sort_option = request.form.get('sort_option', 'date_desc')
+
     # Pagination parameters
     office365_next_page = request.args.get('office365_next_page')
     linkedin_next_page = request.args.get('linkedin_next_page')
@@ -89,11 +92,13 @@ def unified_inbox():
     try:
         emails, office365_next_page = fetch_office365_emails(microsoft_token['access_token'], office365_next_page)
     except Exception as e:
+        flash('Failed to retrieve Office 365 emails.', 'danger')
         emails = []
 
     try:
         linkedin_messages, linkedin_next_page = fetch_linkedin_messages(linkedin_token['access_token'], linkedin_next_page)
     except Exception as e:
+        flash('Failed to retrieve LinkedIn messages.', 'danger')
         linkedin_messages = []
 
     # Filter emails and messages based on the search query
@@ -101,20 +106,34 @@ def unified_inbox():
         emails = [email for email in emails if search_query in email.get('subject', '').lower()]
         linkedin_messages = [msg for msg in linkedin_messages if search_query in msg.get('subject', '').lower()]
 
+    # Sort emails and LinkedIn messages
+    if sort_option == 'subject_asc':
+        emails.sort(key=lambda x: x.get('subject', '').lower())
+        linkedin_messages.sort(key=lambda x: x.get('subject', '').lower())
+    elif sort_option == 'subject_desc':
+        emails.sort(key=lambda x: x.get('subject', '').lower(), reverse=True)
+        linkedin_messages.sort(key=lambda x: x.get('subject', '').lower(), reverse=True)
+    elif sort_option == 'date_asc':
+        emails.sort(key=lambda x: x.get('receivedDateTime', ''))
+        linkedin_messages.sort(key=lambda x: x.get('created', ''))
+    elif sort_option == 'date_desc':
+        emails.sort(key=lambda x: x.get('receivedDateTime', ''), reverse=True)
+        linkedin_messages.sort(key=lambda x: x.get('created', ''), reverse=True)
+
     unified = {
         'emails': emails,
         'linkedin_messages': linkedin_messages,
         'office365_next_page': office365_next_page,
         'linkedin_next_page': linkedin_next_page
     }
-    return render_template('inbox.html', unified=unified, search_query=search_query)
+    return render_template('inbox.html', unified=unified, search_query=search_query, sort_option=sort_option)
 
 # Unit Tests
 class TestFetchEmails(unittest.TestCase):
     @patch('requests.get')
     def test_fetch_office365_emails(self, mock_get):
         mock_response = {
-            'value': [{'subject': 'Test email'}],
+            'value': [{'subject': 'Test email', 'receivedDateTime': '2024-01-01T12:00:00Z'}],
             '@odata.nextLink': 'https://graph.microsoft.com/nextPageLink'
         }
         mock_get.return_value.status_code = 200
@@ -127,7 +146,7 @@ class TestFetchEmails(unittest.TestCase):
     @patch('requests.get')
     def test_fetch_linkedin_messages(self, mock_get):
         mock_response = {
-            'elements': [{'subject': 'Test message'}],
+            'elements': [{'subject': 'Test message', 'created': '2024-01-01T12:00:00Z'}],
             'paging': {'next': 'https://linkedin.com/nextPage'}
         }
         mock_get.return_value.status_code = 200
