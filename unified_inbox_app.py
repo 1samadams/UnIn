@@ -49,8 +49,8 @@ def cache_api_response(cache_key):
     return decorator
 
 @app.route('/')
-def index():
-    return render_template('index.html')
+def inbox():
+    return render_template('inbox.html')
 
 @app.route('/login/microsoft')
 def login_microsoft():
@@ -111,7 +111,7 @@ def unified_inbox():
     microsoft_token = session.get('microsoft_token')
     linkedin_token = session.get('linkedin_token')
     if not microsoft_token or not linkedin_token:
-        return redirect(url_for('index'))
+        return redirect(url_for('inbox'))
 
     # Handle search query
     search_query = request.form.get('search_query', '').lower()
