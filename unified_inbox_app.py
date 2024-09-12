@@ -1,5 +1,3 @@
-# File: unified_inbox_app.py
-
 import os
 import requests
 import logging
